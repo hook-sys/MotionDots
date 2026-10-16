@@ -22,9 +22,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   try {
     const { data: project } = await db
       .from("projects")
-      .select("logo_path, aspect_ratio, voiceovers(path)")
+      .select("logo_path, aspect_ratio, voiceovers(path, words)")
       .eq("id", id)
-      .single<{ logo_path: string; aspect_ratio: string; voiceovers: { path: string } }>();
+      .single<{ logo_path: string; aspect_ratio: string; voiceovers: { path: string; words: unknown } }>();
     if (!project) throw new Error("Project not found");
     const path = videoPath(auth.user.id, id);
     const [audio, logo, upload] = await Promise.all([
@@ -33,7 +33,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       db.storage.from("renders").createSignedUploadUrl(path, { upsert: true }),
     ]);
     if (!audio.data || !logo.data || !upload.data) throw new Error("Could not sign the files");
-    return Response.json({ jobId, audioUrl: audio.data.signedUrl, logoUrl: logo.data.signedUrl, aspectRatio: project.aspect_ratio, upload: { path, token: upload.data.token } }, { status: 201 });
+    return Response.json({ jobId, audioUrl: audio.data.signedUrl, logoUrl: logo.data.signedUrl, aspectRatio: project.aspect_ratio, words: project.voiceovers.words, upload: { path, token: upload.data.token } }, { status: 201 });
   } catch (e) {
     console.error("render could not be prepared", jobId, e);
     await db.rpc("fail_render_job", { p_job: jobId, p_error: "Render could not be started" });
