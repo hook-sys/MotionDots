@@ -1,12 +1,13 @@
-import { notFound, redirect } from "next/navigation";
-import { requireSuperAdmin } from "@/lib/auth";
-import { ModelsForm } from "@/components/models-form";
+import { ModelsForm } from "@/components/admin/models-form";
+import { PageHeader } from "@/components/admin/ui";
 
-export default async function AdminModelsPage() {
-  const auth = await requireSuperAdmin();
-  if ("error" in auth) {
-    if (auth.error.status === 401) redirect("/login");
-    notFound();
-  }
-  return <ModelsForm />;
+export const metadata = { title: "AI models" };
+
+export default function AdminModelsPage() {
+  return (
+    <>
+      <PageHeader title="AI models" sub="Which fal model runs each step. A step with no model fails with a clear error." />
+      <ModelsForm />
+    </>
+  );
 }

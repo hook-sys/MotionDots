@@ -18,7 +18,7 @@ export async function startCheckout(userId: string, email: string | undefined, p
   if (netCents === 0) {
     const { error: e } = await db.rpc("fulfill_payment", { p_payment: paymentId, p_paid_cents: 0, p_session: null });
     if (e) throw new Error(e.message);
-    return { url: `${site}/dashboard?paid=1` };
+    return { url: `${site}/billing?paid=1` };
   }
 
   try {
@@ -28,8 +28,8 @@ export async function startCheckout(userId: string, email: string | undefined, p
       client_reference_id: userId,
       line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: netCents, product_data: { name: `${pack.credits} MotionDots credits` } } }],
       metadata: { payment_id: paymentId },
-      success_url: `${site}/dashboard?paid=1`,
-      cancel_url: `${site}/dashboard`,
+      success_url: `${site}/billing?paid=1`,
+      cancel_url: `${site}/billing`,
     });
     await db.from("payments").update({ stripe_session_id: session.id }).eq("id", paymentId);
     return { url: session.url! };
