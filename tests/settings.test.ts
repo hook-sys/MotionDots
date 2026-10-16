@@ -6,19 +6,25 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: stored === null ? null : { value: stored } }) }) }) }) }),
 }));
 
-const { getAiModels } = await import("@/lib/settings");
+const { getAiModels, getStepConfig, aiModelsSchema } = await import("@/lib/settings");
 
-describe("getAiModels", () => {
-  it("fails when no admin has set models (no built-in fallback)", async () => {
+describe("AI model settings", () => {
+  it("has no models until an admin saves them (no defaults)", async () => {
     stored = null;
-    await expect(getAiModels()).rejects.toThrow("not configured");
+    await expect(getStepConfig("director")).resolves.toBeNull();
+    await expect(getAiModels()).resolves.toEqual({ voiceArtists: [] });
   });
-  it("fails on incomplete settings", async () => {
-    stored = { textModel: "m", voiceModel: "", voiceArtists: [] };
-    await expect(getAiModels()).rejects.toThrow("not configured");
+  it("returns each step's own model and reasoning", async () => {
+    stored = { director: { model: "a/opus", reasoning: "high" }, fast: { model: "b/flash" }, voiceArtists: ["Rachel"] };
+    await expect(getStepConfig("director")).resolves.toEqual({ model: "a/opus", reasoning: "high" });
+    await expect(getStepConfig("fast")).resolves.toEqual({ model: "b/flash" });
+    await expect(getStepConfig("voice")).resolves.toBeNull();
   });
-  it("returns what the admin saved", async () => {
-    stored = { textModel: "t", voiceModel: "v", voiceArtists: ["Rachel"] };
-    await expect(getAiModels()).resolves.toEqual(stored);
+  it("fails loudly on corrupt settings", async () => {
+    stored = { director: { model: "" }, voiceArtists: [] };
+    await expect(getAiModels()).rejects.toThrow("invalid");
+  });
+  it("rejects a bad reasoning level", () => {
+    expect(aiModelsSchema.safeParse({ director: { model: "m", reasoning: "max" }, voiceArtists: [] }).success).toBe(false);
   });
 });

@@ -26,7 +26,7 @@ export async function startCheckout(userId: string, email: string | undefined, p
       mode: "payment",
       customer_email: email,
       client_reference_id: userId,
-      line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: netCents, product_data: { name: `${pack.credits} credits` } } }],
+      line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: netCents, product_data: { name: `${pack.credits} MotionDots credits` } } }],
       metadata: { payment_id: paymentId },
       success_url: `${site}/dashboard?paid=1`,
       cancel_url: `${site}/dashboard`,

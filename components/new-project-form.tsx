@@ -48,7 +48,7 @@ export function NewProjectForm() {
 
   return (
     <form onSubmit={create}>
-      <h1>New project</h1>
+      <h1>MotionDots - New project</h1>
       <textarea name="script" rows={6} placeholder="Voiceover script" />
       <select name="voiceArtist" disabled={!artists.length}>
         {artists.map((a) => (

@@ -26,7 +26,8 @@ export function AuthForm() {
 
   return (
     <form onSubmit={submit}>
-      <h1>{mode === "signin" ? "Sign in" : "Create account"}</h1>
+      <h1>MotionDots</h1>
+      <h2>{mode === "signin" ? "Sign in" : "Create account"}</h2>
       <input name="email" type="email" placeholder="Email" required />
       <input name="password" type="password" placeholder="Password" minLength={8} required />
       <button type="submit">{mode === "signin" ? "Sign in" : "Sign up"}</button>
