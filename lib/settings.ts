@@ -10,7 +10,13 @@ import { TEXT_STEPS } from "@/lib/steps";
 export const AI_MODELS_KEY = "ai_models";
 
 const model = z.string().trim().min(1).max(200);
-const endpoint = z.string().trim().regex(/^[a-z0-9][a-z0-9._\/-]{0,199}$/i, "fal endpoint id looks invalid");
+// A fal endpoint id: owner/name or owner/name/sub/path (openrouter/router, fal-ai/whisper, fal-ai/elevenlabs/tts/...).
+// A pasted fal.ai model or fal.run URL is reduced to its id.
+const FAL_ID = /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)+$/i;
+const endpoint = z
+  .string()
+  .transform((s) => s.trim().replace(/^https?:\/\/(?:fal\.ai\/models|fal\.run)\//i, "").replace(/\/+$/, ""))
+  .pipe(z.string().max(200).regex(FAL_ID, { error: (issue) => `"${String(issue.input)}" is not a fal endpoint id. Use owner/name, for example openrouter/router` }));
 const text = z.object({ endpoint: endpoint.optional(), model, reasoning: z.enum(["low", "medium", "high"]).optional() });
 const media = z.object({ model });
 

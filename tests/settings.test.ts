@@ -34,6 +34,28 @@ describe("AI model settings", () => {
   it("saving requires a fal endpoint for every text step that has a model", () => {
     expect(aiModelsSaveSchema.safeParse({ fast: { model: "m" }, voiceArtists: [] }).success).toBe(false);
     expect(aiModelsSaveSchema.safeParse({ fast: { endpoint: "openrouter/router", model: "m" }, voiceArtists: [] }).success).toBe(true);
-    expect(aiModelsSaveSchema.safeParse({ fast: { endpoint: "../evil?x", model: "m" }, voiceArtists: [] }).success).toBe(false);
+  });
+
+  const endpointOf = (endpoint: string) => aiModelsSaveSchema.safeParse({ fast: { endpoint, model: "m" }, voiceArtists: [] });
+
+  it.each(["openrouter/router", "fal-ai/whisper", "fal-ai/elevenlabs/tts/eleven-v3", "some-owner/model.v2", "Owner/Name"])("accepts the fal id %s", (id) => {
+    const r = endpointOf(id);
+    expect(r.success && r.data.fast?.endpoint).toBe(id);
+  });
+
+  it.each([
+    [" openrouter/router ", "openrouter/router"],
+    ["openrouter/router/", "openrouter/router"],
+    ["https://fal.ai/models/openrouter/router", "openrouter/router"],
+    ["https://fal.run/fal-ai/elevenlabs/tts/eleven-v3/", "fal-ai/elevenlabs/tts/eleven-v3"],
+  ])("cleans up %s to %s", (pasted, id) => {
+    const r = endpointOf(pasted);
+    expect(r.success && r.data.fast?.endpoint).toBe(id);
+  });
+
+  it.each(["router", "/openrouter/router", "a//b", "../evil", "openrouter/router?x=1", "open router/router", "https://example.com/openrouter/router"])("rejects %s", (id) => {
+    const r = endpointOf(id);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0].message).toContain("is not a fal endpoint id");
   });
 });

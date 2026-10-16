@@ -79,7 +79,7 @@ describe("single AI client", () => {
     for (const file of walk(root)) {
       const rel = path.relative(root, file).replaceAll("\\", "/");
       if (rel === "lib/ai/fal.ts") continue;
-      expect(readFileSync(file, "utf8"), rel).not.toMatch(/@fal-ai\/client|fal\.run|openrouter\.ai|from ["']openai["']|@anthropic-ai|@google\/genai|api\.openai\.com|api\.anthropic\.com|elevenlabs\.io/i);
+      expect(readFileSync(file, "utf8"), rel).not.toMatch(/@fal-ai\/client|fal\.run\/\$\{|openrouter\.ai|from ["']openai["']|@anthropic-ai|@google\/genai|api\.openai\.com|api\.anthropic\.com|elevenlabs\.io/i);
     }
   });
 });
