@@ -16,9 +16,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   // (RLS: only the owner's own project comes back)
   const { data: project } = await supabase
     .from("projects")
-    .select("id, script, aspect_ratio, status, video_path, error, created_at, voiceovers(source, voice_artist)")
+    .select("id, script, aspect_ratio, status, video_path, error, created_at")
     .eq("id", id)
-    .maybeSingle<{ id: string; script: string | null; aspect_ratio: string; status: ProjectStatus; video_path: string | null; error: string | null; created_at: string; voiceovers: { source: string; voice_artist: string | null } }>();
+    .maybeSingle<{ id: string; script: string | null; aspect_ratio: string; status: ProjectStatus; video_path: string | null; error: string | null; created_at: string }>();
   if (!project) notFound();
 
   const { data: job } = await supabase.from("render_jobs").select("id").eq("project_id", id).in("status", ["starting", "rendering"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -54,7 +54,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
           <dl className="flex flex-col gap-3 self-start rounded-2xl bg-white/70 p-5 text-sm ring-1 ring-black/[0.06]">
             <Fact k="Shape" v={project.aspect_ratio} />
-            <Fact k="Voice" v={project.voiceovers.source === "uploaded" ? "Your own recording" : (project.voiceovers.voice_artist ?? "Generated")} />
             <Fact k="Created" v={new Date(project.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} />
             {project.script && (
               <div>

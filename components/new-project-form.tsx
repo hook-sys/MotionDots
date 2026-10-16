@@ -1,136 +1,129 @@
 "use client";
-import { useState } from "react";
+import Link from "next/link";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ASPECT_RATIOS, type AspectRatio } from "@/lib/aspect";
+import { RENDER_CREDITS } from "@/lib/render/cost";
 import { MAX_SCRIPT_CHARS, voiceCredits } from "@/lib/voice/rules";
 
 const label = "text-sm font-medium";
-const input =
-  "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 const area =
   "w-full resize-y rounded-2xl border border-foreground/12 bg-white/80 p-4 text-base leading-relaxed placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 
 const SHAPE_HINT: Record<AspectRatio, string> = { "16:9": "Web, YouTube", "9:16": "Reels, TikTok", "1:1": "Feed" };
+const STAGE_TEXT = { voice: "Making your voice…", project: "Setting up your video…", render: "Starting the render…" };
 
 type Props = { artists: string[]; canGenerate: boolean; canUpload: boolean; credits: number };
 
-// The four inputs: script or uploaded voice, voice artist, logo/icon, aspect ratio.
-// The voice is made first (/api/voice/*), then the project is created (/api/projects).
+// The four inputs: script or your own recording, voice artist, logo/icon, aspect ratio.
+// One button: it makes the voice, creates the project and starts the render, then opens the video page.
 export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Props) {
   const router = useRouter();
   const [script, setScript] = useState("");
   const [artist, setArtist] = useState(artists[0] ?? "");
   const [format, setFormat] = useState<AspectRatio>("16:9");
-  const [voice, setVoice] = useState<{ id: string; text: string } | null>(null);
+  const [recording, setRecording] = useState<File | null>(null);
   const [logo, setLogo] = useState<{ file: File; url: string } | null>(null);
-  const [busy, setBusy] = useState<"" | "voice" | "upload" | "create">("");
+  const [stage, setStage] = useState<keyof typeof STAGE_TEXT | "">("");
   const [error, setError] = useState("");
+  const [projectId, setProjectId] = useState("");
+  // (a voice already made for these inputs is reused if a later step failed: no second charge)
+  const made = useRef<{ key: string; id: string } | null>(null);
 
-  const cost = script.trim() ? voiceCredits(script.trim()) : 0;
+  const useScript = !recording;
+  const cost = (useScript && script.trim() ? voiceCredits(script.trim()) : 0) + RENDER_CREDITS;
+  const ready = !!logo && (recording ? canUpload : !!script.trim() && canGenerate && !!artist);
 
-  async function generate() {
-    setError("");
-    setBusy("voice");
-    const res = await fetch("/api/voice/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ script, voiceArtist: artist }) });
+  async function call(url: string, init: RequestInit) {
+    const res = await fetch(url, init);
     const body = await res.json();
-    setBusy("");
-    if (!res.ok) return setError(body.error);
-    setVoice({ id: body.voiceoverId, text: `Voice by ${artist} is ready (${body.credits} credits used)` });
+    if (!res.ok) throw new Error(body.error ?? "Something went wrong");
+    return body;
   }
 
-  async function upload(file: File) {
-    setError("");
-    setBusy("upload");
-    const data = new FormData();
-    data.set("file", file);
-    const res = await fetch("/api/voice/upload", { method: "POST", body: data });
-    const body = await res.json();
-    setBusy("");
-    if (!res.ok) return setError(body.error);
-    setVoice({ id: body.voiceoverId, text: `Your recording is ready (${file.name})` });
-  }
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    if (!voice || !logo) return;
-    setError("");
-    setBusy("create");
-    const data = new FormData();
-    data.set("voiceoverId", voice.id);
-    data.set("logo", logo.file);
-    data.set("aspectRatio", format);
-    if (script.trim()) data.set("script", script.trim());
-    const res = await fetch("/api/projects", { method: "POST", body: data });
-    const body = await res.json();
-    if (!res.ok) {
-      setBusy("");
-      return setError(body.error);
+  async function makeVoice(): Promise<string> {
+    const key = `${recording?.name ?? ""}|${script}|${artist}`;
+    if (made.current?.key === key) return made.current.id;
+    let id: string;
+    if (recording) {
+      const data = new FormData();
+      data.set("file", recording);
+      id = (await call("/api/voice/upload", { method: "POST", body: data })).voiceoverId;
+    } else {
+      const body = JSON.stringify({ script: script.trim(), voiceArtist: artist });
+      id = (await call("/api/voice/generate", { method: "POST", headers: { "content-type": "application/json" }, body })).voiceoverId;
     }
-    router.push(`/projects/${body.projectId}`);
+    made.current = { key, id };
+    return id;
   }
 
-  const submit = (
-    <button className="gs-btn big w-full" disabled={!voice || !logo || busy !== ""}>
-      {busy === "create" ? "Creating…" : "Create project"}
-    </button>
-  );
-  const missing = !voice ? "Add a voice first" : !logo ? "Add your logo" : "";
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!logo) return;
+    setError("");
+    try {
+      setStage("voice");
+      const voiceoverId = await makeVoice();
+      setStage("project");
+      const data = new FormData();
+      data.set("voiceoverId", voiceoverId);
+      data.set("logo", logo.file);
+      data.set("aspectRatio", format);
+      if (script.trim()) data.set("script", script.trim());
+      const id: string = (await call("/api/projects", { method: "POST", body: data })).projectId;
+      setProjectId(id);
+      setStage("render");
+      await call(`/api/projects/${id}/render`, { method: "POST" });
+      router.push(`/projects/${id}`);
+    } catch (err) {
+      setError((err as Error).message);
+      setStage("");
+    }
+  }
+
+  const missing = !logo ? "Add your logo" : !script.trim() && !recording ? "Write a script or upload a recording" : cost > credits ? `Needs ${cost} credits, you have ${credits}` : "";
 
   return (
-    <form onSubmit={create} className="grid gap-6 lg:grid-cols-[1fr_300px]">
+    <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_300px]">
       <div className="flex flex-col gap-4">
-        <Step n={1} title="Script" sub="Write what the voice should say. Optional if you upload your own recording.">
+        <Step n={1} title="Script" sub="Write what the voice should say.">
           <textarea value={script} onChange={(e) => setScript(e.target.value.slice(0, MAX_SCRIPT_CHARS))} rows={6} placeholder="Your voiceover script" className={area} />
           <span className="self-end text-xs tabular-nums text-foreground/50">
             {script.length}/{MAX_SCRIPT_CHARS}
           </span>
+          {!canGenerate && <p className="rounded-xl border border-foreground/10 bg-white/70 px-4 py-3 text-sm text-foreground/60">Voices from a script are coming soon. You can upload your own recording below.</p>}
         </Step>
 
-        <Step n={2} title="Voice" sub="Pick a voice artist to read your script, or upload your own recording.">
-          {voice ? (
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#0a66d6] bg-white/70 p-4 ring-4 ring-[#0a66d6]/15">
-              <span className="text-sm font-medium">{voice.text}</span>
-              <button type="button" onClick={() => setVoice(null)} className="text-sm text-[#0a66d6] hover:underline">
-                Change
-              </button>
+        {canGenerate && artists.length > 0 && (
+          <Step n={2} title="Voice artist" sub="Who reads your script.">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {artists.map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => setArtist(a)}
+                  aria-pressed={artist === a}
+                  className={`rounded-2xl border bg-white/70 p-3.5 text-left text-sm font-semibold ${artist === a ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/10 hover:bg-white"}`}
+                >
+                  {a}
+                </button>
+              ))}
             </div>
-          ) : (
-            <>
-              <Field title="Voice artist">
-                {canGenerate && artists.length ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {artists.map((a) => (
-                      <button
-                        key={a}
-                        type="button"
-                        onClick={() => setArtist(a)}
-                        aria-pressed={artist === a}
-                        className={`rounded-2xl border bg-white/70 p-3.5 text-left text-sm font-semibold ${artist === a ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/10 hover:bg-white"}`}
-                      >
-                        {a}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="rounded-xl border border-foreground/10 bg-white/70 px-4 py-3 text-sm text-foreground/60">Generated voices are coming soon. You can upload your own recording below.</p>
-                )}
-              </Field>
-              {canGenerate && artists.length > 0 && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <button type="button" className="gs-btn" disabled={!script.trim() || !artist || busy !== "" || cost > credits} onClick={generate}>
-                    {busy === "voice" ? "Generating…" : "Generate voice"}
-                  </button>
-                  <span className="text-xs text-foreground/55">{cost > credits ? `Needs ${cost} credits, you have ${credits}` : cost ? `Costs ${cost} credit${cost > 1 ? "s" : ""}` : "Write a script first"}</span>
-                </div>
-              )}
-              <Upload title="Or upload your own recording" text={busy === "upload" ? "Uploading and transcribing…" : "Upload a recording"} sub={canUpload ? "MP3, WAV, M4A, OGG or WebM · up to 25 MB" : "Coming soon"}>
-                <input type="file" accept="audio/*" disabled={!canUpload || busy !== ""} className="sr-only" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-              </Upload>
-            </>
+          </Step>
+        )}
+
+        <Step n={3} title="Your own voice (optional)" sub="Upload a recording and it is used instead of the script's voice.">
+          <Upload title="Recording" text={recording ? recording.name : "Upload a recording"} sub={canUpload ? "MP3, WAV, M4A, OGG or WebM · up to 25 MB" : "Coming soon"}>
+            <input type="file" accept="audio/*" disabled={!canUpload} className="sr-only" onChange={(e) => setRecording(e.target.files?.[0] ?? null)} />
+          </Upload>
+          {recording && (
+            <button type="button" onClick={() => setRecording(null)} className="self-start text-sm text-[#0a66d6] hover:underline">
+              Remove recording
+            </button>
           )}
         </Step>
 
-        <Step n={3} title="Logo or icon" sub="Shown in your video.">
+        <Step n={4} title="Logo or icon" sub="Shown in your video.">
           <Upload
             title="Logo or icon"
             text={logo ? logo.file.name : "Upload a logo"}
@@ -149,7 +142,7 @@ export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Pro
           </Upload>
         </Step>
 
-        <Step n={4} title="Shape">
+        <Step n={5} title="Shape">
           <div className="grid grid-cols-3 gap-3">
             {ASPECT_RATIOS.map((f) => {
               const [w, h] = f.split(":").map(Number);
@@ -172,7 +165,19 @@ export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Pro
           </div>
         </Step>
 
-        {error && <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">{error}</p>}
+        {error && (
+          <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">
+            {error}
+            {projectId && (
+              <>
+                {" "}
+                <Link href={`/projects/${projectId}`} className="font-medium underline">
+                  Open your video
+                </Link>
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       <aside className="flex flex-col gap-4 self-start rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06] lg:sticky lg:top-6">
@@ -181,13 +186,15 @@ export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Pro
         </span>
         <dl className="grid grid-cols-2 gap-3 text-sm">
           <Summary k="Shape" v={format} />
-          <Summary k="Voice" v={voice ? "Ready" : "—"} />
-          <Summary k="Logo" v={logo ? "Added" : "—"} />
-          <Summary k="Credits" v={credits.toLocaleString("en-US")} />
+          <Summary k="Voice" v={recording ? "Your recording" : canGenerate ? artist || "—" : "—"} />
+          <Summary k="Cost" v={`${cost} credits`} />
+          <Summary k="You have" v={credits.toLocaleString("en-US")} />
         </dl>
-        {submit}
+        <button className="gs-btn big w-full" disabled={!ready || cost > credits || stage !== ""}>
+          {stage ? STAGE_TEXT[stage] : "Create video"}
+        </button>
         {missing && <p className="text-center text-xs text-foreground/50">{missing}</p>}
-        <p className="text-center text-[11px] text-foreground/45">Rendering is a separate step · download as MP4</p>
+        <p className="text-center text-[11px] text-foreground/45">Your video is made in the background · download as MP4</p>
       </aside>
     </form>
   );
@@ -205,15 +212,6 @@ function Step({ n, title, sub, children }: { n: number; title: string; sub?: str
       </div>
       {children}
     </section>
-  );
-}
-
-function Field({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className={label}>{title}</span>
-      {children}
-    </div>
   );
 }
 

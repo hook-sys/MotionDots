@@ -8,7 +8,17 @@ describe("parseElevenLabsWords", () => {
       { text: "world", start: 0.5, end: 0.9 },
     ]);
   });
+  it("reads alternative key names", () => {
+    expect(parseElevenLabsWords([{ word: "Hi", start_time: 0.1, end_time: 0.4 }])).toEqual([{ text: "Hi", start: 0.1, end: 0.4 }]);
+  });
+  it("groups ElevenLabs character timing into words using the real character times", () => {
+    const alignment = { characters: ["H", "i", " ", "y", "o", "u"], character_start_times_seconds: [0, 0.1, 0.2, 0.3, 0.4, 0.5], character_end_times_seconds: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] };
+    const expected = [{ text: "Hi", start: 0, end: 0.2 }, { text: "you", start: 0.3, end: 0.6 }];
+    expect(parseElevenLabsWords(alignment)).toEqual(expected);
+    expect(parseElevenLabsWords([{ alignment }])).toEqual(expected);
+  });
   it("returns null instead of guessing", () => {
+    expect(parseElevenLabsWords({ characters: ["a"], character_start_times_seconds: [0], character_end_times_seconds: [] })).toBeNull();
     expect(parseElevenLabsWords(undefined)).toBeNull();
     expect(parseElevenLabsWords([])).toBeNull();
     expect(parseElevenLabsWords([{ text: "a", start: 1, end: 0.5 }])).toBeNull();
