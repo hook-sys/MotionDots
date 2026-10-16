@@ -1,6 +1,6 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AI_MODELS_KEY, aiModelsSchema } from "@/lib/settings";
+import { AI_MODELS_KEY, aiModelsSaveSchema } from "@/lib/settings";
 
 export async function GET() {
   const auth = await requireSuperAdmin();
@@ -12,8 +12,8 @@ export async function GET() {
 export async function PUT(req: Request) {
   const auth = await requireSuperAdmin();
   if ("error" in auth) return auth.error;
-  const parsed = aiModelsSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Invalid models" }, { status: 400 });
+  const parsed = aiModelsSaveSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Invalid models" }, { status: 400 });
   const { error } = await createAdminClient()
     .from("app_settings")
     .upsert({ key: AI_MODELS_KEY, value: parsed.data, updated_at: new Date().toISOString(), updated_by: auth.user.id });
