@@ -3,7 +3,7 @@ import { useState } from "react";
 
 type Pack = { id: string; credits: number; cents: number };
 
-export function BuyCredits({ packs }: { packs: readonly Pack[] }) {
+export function BuyCredits({ packs, billingEnabled }: { packs: readonly Pack[]; billingEnabled: boolean }) {
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
 
@@ -28,10 +28,11 @@ export function BuyCredits({ packs }: { packs: readonly Pack[] }) {
     <section>
       <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Coupon code (optional)" />
       {packs.map((p) => (
-        <button key={p.id} onClick={() => buy(p.id)}>
+        <button key={p.id} onClick={() => buy(p.id)} disabled={!billingEnabled}>
           {p.credits} credits - ${(p.cents / 100).toFixed(2)}
         </button>
       ))}
+      {!billingEnabled && <p>Buying credits is not available yet.</p>}
       <button onClick={redeem} disabled={!code}>Redeem code for credits</button>
       {message && <p className="error">{message}</p>}
     </section>

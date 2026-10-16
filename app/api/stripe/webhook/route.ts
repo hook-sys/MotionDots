@@ -1,9 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
-import { stripe } from "@/lib/stripe";
+import { billingEnabled, stripe } from "@/lib/stripe";
 
 // Stripe calls this, not a signed-in user: the request is authenticated by its signature.
 export async function POST(req: Request) {
+  if (!billingEnabled()) return new Response("Payments are not set up", { status: 503 });
   const signature = req.headers.get("stripe-signature");
   if (!signature) return new Response("Missing signature", { status: 400 });
   let event;
