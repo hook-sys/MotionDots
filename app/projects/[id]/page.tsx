@@ -4,15 +4,18 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/site/app-shell";
 import { RenderButton } from "@/components/render-button";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { failStaleJobs } from "@/lib/render/job";
 import { getSiteUser } from "@/lib/site-user";
 import { STATUS_UI, projectTitle, type ProjectStatus } from "@/lib/project-ui";
 
 export const metadata: Metadata = { title: "Video" };
 
 // One project: what was chosen, the render, and the finished video.
-export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProjectPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ start?: string }> }) {
   const { id } = await params;
+  const { start } = await searchParams;
   const { supabase, admin, initial } = await getSiteUser();
+  await failStaleJobs(id);
   // (RLS: only the owner's own project comes back)
   const { data: project } = await supabase
     .from("projects")
@@ -46,10 +49,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 </a>
               </>
             ) : (
-              <div className="flex aspect-video items-center justify-center rounded-2xl bg-[#1d1d1f] text-sm text-white/70">{project.status === "rendering" ? "Rendering…" : "Not rendered yet"}</div>
+              <div className="flex aspect-video items-center justify-center rounded-2xl bg-[#1d1d1f] text-sm text-white/70">{project.status === "rendering" ? "Your video is being made…" : "Not rendered yet"}</div>
             )}
             {project.status === "failed" && project.error && <p className="gs-note error">{project.error}. Your credits were returned.</p>}
-            {project.status !== "done" && <RenderButton projectId={project.id} jobId={job?.id} />}
+            {project.status !== "done" && <RenderButton projectId={project.id} interruptedJobId={job?.id} autoStart={start === "1" && project.status === "draft"} />}
           </div>
 
           <dl className="flex flex-col gap-3 self-start rounded-2xl bg-white/70 p-5 text-sm ring-1 ring-black/[0.06]">

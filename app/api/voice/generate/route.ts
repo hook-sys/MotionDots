@@ -21,10 +21,14 @@ export async function POST(req: Request) {
   if (!models.voice) return Response.json({ error: "Voice generation: no model is set. A super admin must set one in /admin/models." }, { status: 503 });
   if (!models.voiceArtists.includes(voiceArtist)) return Response.json({ error: "Unknown voice artist" }, { status: 400 });
 
+  // the same script with the same artist is never paid for twice: the voice made before is used again
+  const db = createAdminClient();
+  const { data: existing } = await db.from("voiceovers").select("id").eq("user_id", auth.user.id).eq("source", "generated").eq("script", script).eq("voice_artist", voiceArtist).limit(1).maybeSingle();
+  if (existing) return Response.json({ voiceoverId: existing.id, credits: 0 });
+
   const credits = voiceCredits(script);
   if (!(await chargeVoice(auth.user.id, credits))) return Response.json({ error: "Not enough credits", needed: credits }, { status: 402 });
 
-  const db = createAdminClient();
   try {
     const { audio, words } = await speak(voiceArtist, script);
     const path = `${auth.user.id}/${crypto.randomUUID()}.mp3`;

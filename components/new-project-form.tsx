@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ASPECT_RATIOS, type AspectRatio } from "@/lib/aspect";
@@ -11,12 +10,12 @@ const area =
   "w-full resize-y rounded-2xl border border-foreground/12 bg-white/80 p-4 text-base leading-relaxed placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 
 const SHAPE_HINT: Record<AspectRatio, string> = { "16:9": "Web, YouTube", "9:16": "Reels, TikTok", "1:1": "Feed" };
-const STAGE_TEXT = { voice: "Making your voice…", project: "Setting up your video…", render: "Starting the render…" };
+const STAGE_TEXT = { voice: "Making your voice…", project: "Setting up your video…" };
 
 type Props = { artists: string[]; canGenerate: boolean; canUpload: boolean; credits: number };
 
 // The four inputs: script or your own recording, voice artist, logo/icon, aspect ratio.
-// One button: it makes the voice, creates the project and starts the render, then opens the video page.
+// One button: it makes the voice and creates the project, then opens the video page, which makes the video.
 export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Props) {
   const router = useRouter();
   const [script, setScript] = useState("");
@@ -26,7 +25,6 @@ export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Pro
   const [logo, setLogo] = useState<{ file: File; url: string } | null>(null);
   const [stage, setStage] = useState<keyof typeof STAGE_TEXT | "">("");
   const [error, setError] = useState("");
-  const [projectId, setProjectId] = useState("");
   // (a voice already made for these inputs is reused if a later step failed: no second charge)
   const made = useRef<{ key: string; id: string } | null>(null);
 
@@ -63,6 +61,8 @@ export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Pro
     setError("");
     try {
       setStage("voice");
+      // (asked first: a browser that cannot make the video must not cost a voice)
+      await (await import("@/lib/render/browser")).assertBrowserCanRender(format);
       const voiceoverId = await makeVoice();
       setStage("project");
       const data = new FormData();
@@ -71,10 +71,7 @@ export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Pro
       data.set("aspectRatio", format);
       if (script.trim()) data.set("script", script.trim());
       const id: string = (await call("/api/projects", { method: "POST", body: data })).projectId;
-      setProjectId(id);
-      setStage("render");
-      await call(`/api/projects/${id}/render`, { method: "POST" });
-      router.push(`/projects/${id}`);
+      router.push(`/projects/${id}?start=1`);
     } catch (err) {
       setError((err as Error).message);
       setStage("");
@@ -165,19 +162,7 @@ export function NewProjectForm({ artists, canGenerate, canUpload, credits }: Pro
           </div>
         </Step>
 
-        {error && (
-          <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">
-            {error}
-            {projectId && (
-              <>
-                {" "}
-                <Link href={`/projects/${projectId}`} className="font-medium underline">
-                  Open your video
-                </Link>
-              </>
-            )}
-          </p>
-        )}
+        {error && <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">{error}</p>}
       </div>
 
       <aside className="flex flex-col gap-4 self-start rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06] lg:sticky lg:top-6">
