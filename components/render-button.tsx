@@ -5,9 +5,10 @@ import { renderInBrowser } from "@/lib/render/browser";
 import { RENDER_CREDITS } from "@/lib/render/cost";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { AspectRatio } from "@/lib/aspect";
+import type { Look } from "@/lib/video/look";
 import type { Word } from "@/lib/voice/words";
 
-type Start = { jobId: string; audioUrl: string; logoUrl: string; aspectRatio: AspectRatio; words: Word[]; upload: { path: string; token: string } };
+type Start = { jobId: string; audioUrl: string; logoUrl: string; aspectRatio: AspectRatio; look: Look; words: Word[]; upload: { path: string; token: string } };
 
 // Makes the video in this browser: starts the job (credits taken), renders, uploads the MP4 and closes the job.
 // If anything fails the job is failed on the server and the credits come back.
@@ -35,7 +36,7 @@ export function RenderButton({ projectId, interruptedJobId, autoStart }: { proje
       if (interruptedJobId) await call(`/api/render-jobs/${interruptedJobId}/fail`);
       const job: Start = await call(`/api/projects/${projectId}/render`);
       jobId = job.jobId;
-      const video = await renderInBrowser({ audioUrl: job.audioUrl, logoUrl: job.logoUrl, words: job.words, aspectRatio: job.aspectRatio, onProgress: setProgress });
+      const video = await renderInBrowser({ audioUrl: job.audioUrl, logoUrl: job.logoUrl, words: job.words, aspectRatio: job.aspectRatio, look: job.look, onProgress: setProgress });
       const { error: uploadError } = await createBrowserSupabase().storage.from("renders").uploadToSignedUrl(job.upload.path, job.upload.token, video, { contentType: "video/mp4", upsert: true });
       if (uploadError) throw new Error(uploadError.message);
       await call(`/api/render-jobs/${jobId}/finish`);

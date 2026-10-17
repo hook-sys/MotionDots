@@ -12,8 +12,11 @@
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
+    "@remotion/layout-utils": "4.0.536",
     "@remotion/media": "4.0.536",
     "@remotion/media-utils": "4.0.536",
+    "@remotion/noise": "4.0.536",
+    "@remotion/paths": "4.0.536",
     "@remotion/web-renderer": "4.0.536",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
